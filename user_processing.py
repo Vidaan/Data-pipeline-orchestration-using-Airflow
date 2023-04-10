@@ -32,9 +32,11 @@ def _store_user():
         filename = '/tmp/processed_user.csv'
     )
 
+# Setting up the DAG
 with DAG('user_processing', start_date=datetime(2023,1,1), schedule_interval='@daily',
  catchup=False) as dag:
     
+    # Task 1
     create_table = PostgresOperator(
         task_id = 'create_table',
         postgres_conn_id = 'postgres',
@@ -50,12 +52,15 @@ with DAG('user_processing', start_date=datetime(2023,1,1), schedule_interval='@d
         '''
     )
 
+    # Task 2 - checks for the validity of the HTTP connection. 
+    # Moves to next task only if it is true.
     is_api_available = HttpSensor(
         task_id = 'is_api_available',
         http_conn_id = 'user_api',
         endpoint = 'api/'
     )
 
+    # Task 3 - extracts the data from the API and saves it in JSON format.
     extract_user = SimpleHttpOperator(
         task_id = 'extract_user',
         http_conn_id = 'user_api',
@@ -65,15 +70,17 @@ with DAG('user_processing', start_date=datetime(2023,1,1), schedule_interval='@d
         log_response = True
     )
 
+    # Task 4
     process_user = PythonOperator(
         task_id = 'process_user',
-        python_callable = _process_user #using the python function defined above DAG
+        python_callable = _process_user #calls the python function (_process_user) defined above DAG
     )
 
+    # Task 5
     store_user = PythonOperator(
         task_id = 'store_user',
-        python_callable = _store_user
+        python_callable = _store_user #calls the python function (_store_user) defined above DAG
     )
 
-    # Defining dependences among the tasks
+    # Defining dependencies among the tasks
     create_table >> is_api_available >> extract_user >> process_user >> store_user
